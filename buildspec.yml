@@ -3,10 +3,11 @@ phases:
   build:
     commands:
       - env
-      - docker build -t "${GIT_USER}:${GIT_PACKAGE}/${GIT_BRANCH}" AmazonLinux
-      - docker tag "${GIT_USER}:${GIT_PACKAGE}/${GIT_BRANCH}" "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${GIT_PACKAGE}@${CODEBUILD_RESOLVED_SOURCE_VERSION}"
-      - docker tag "${GIT_USER}:${GIT_PACKAGE}/${GIT_BRANCH}" "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${GIT_PACKAGE}/${GIT_BRANCH}"
-      - docker push "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${GIT_PACKAGE}/${GIT_BRANCH}"
+      - docker build -t "${GIT_USER}:${GIT_PACKAGE}" AmazonLinux
+      - docker tag "${GIT_USER}:${GIT_PACKAGE}" "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${CODEBUILD_RESOLVED_SOURCE_VERSION}"
+      - docker tag "${GIT_USER}:${GIT_PACKAGE}" "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${GIT_PACKAGE}"
+      - docker tag "${GIT_USER}:${GIT_PACKAGE}" "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${GIT_BRANCH}"
+      - docker push "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${IMAGE_REPO_NAME}:${GIT_PACKAGE}"
       - touch artifact.txt
 artifacts:
   type: zip
