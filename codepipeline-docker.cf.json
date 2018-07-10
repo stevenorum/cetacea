@@ -1,0 +1,379 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "",
+    "Parameters": {
+        "UserName": {
+            "Type": "String",
+            "Description": "GitHub user name."
+        },
+        "OAuthToken": {
+            "Type": "String",
+            "Description": "GitHub OAuthToken giving AWS access to GitHub."
+        },
+        "PackageName": {
+            "Type": "String",
+            "Description": "GitHub package name."
+        },
+        "PackageBranch": {
+            "Type": "String",
+            "Description": "GitHub package branch.",
+            "Default": "master"
+        },
+        "BuildTimeout": {
+            "Type": "Number",
+            "Description": "Max time for the build to take, in minutes.",
+            "Default": 15
+        },
+        "ExistingECRRepo": {
+            "Type":"String",
+            "Description":"Name of an existing ECR repository.  If none is provided, a new one will be created.",
+            "Default":""
+        },
+        "NewECRRepoName": {
+            "Type":"String",
+            "Description":"Name to use for a new ECR repository.  Ignored if ECRRepo is provided.",
+            "Default":""
+        }
+    },
+    "Conditions":{
+        "RepoNotProvided":{
+            "Fn::Equals":["",{"Ref":"ExistingECRRepo"}]
+        },
+        "RepoNameProvided":{
+            "Fn::Not":[{"Fn::Equals":["",{"Ref":"NewECRRepoName"}]}]
+        }
+    },
+    "Resources": {
+        "ECRRepo": {
+            "Type" : "AWS::ECR::Repository",
+            "Condition" : "RepoNotProvided",
+            "Properties" : {
+                "RepositoryName" : {"Fn::If":["RepoNameProvided",{"Ref":"NewECRRepoName"},{"Ref":"AWS::NoValue"}]}
+            }
+        },
+        "CodeBuildArtifactBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+            }
+        },
+        "BuildPolicy": {
+            "Type": "AWS::IAM::ManagedPolicy",
+            "Properties": {
+                "Description": "",
+                "Path": "/",
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${PackageName}-${PackageBranch}"
+                                },
+                                {
+                                    "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${PackageName}-${PackageBranch}:*"
+                                },
+                                {
+                                    "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${PackageName}-${PackageBranch}/*"
+                                }
+                            ],
+                            "Action": [
+                                "logs:CreateLogGroup",
+                                "logs:CreateLogStream",
+                                "logs:PutLogEvents"
+                            ]
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Resource": [
+                                {"Fn::Sub": "arn:${AWS::Partition}:s3:::${CodeBuildArtifactBucket}/*"}
+                            ],
+                            "Action": [
+                                "s3:PutObject",
+                                "s3:GetObject",
+                                "s3:GetObjectVersion"
+                            ]
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Resource": "*",
+                            "Action": [
+                                "ecr:*",
+                                "ecs:*"
+                            ]
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "ssm:GetParameters"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/CodeBuild/*"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "BuildRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "codebuild.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    {
+                        "Ref": "BuildPolicy"
+                    }
+                ],
+                "Path": "/"
+            }
+        },
+        "PipelinePolicy": {
+            "Type": "AWS::IAM::ManagedPolicy",
+            "Properties": {
+                "Description": "",
+                "Path": "/",
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Action": [
+                                "codebuild:*",
+                                "codedeploy:*"
+                            ],
+                            "Resource": "*",
+                            "Effect": "Allow"
+                        },
+                        {
+                            "Action": [
+                                "cloudwatch:*",
+                                "s3:*",
+                                "sns:*",
+                                "ecr:*",
+                                "ecs:*",
+                                "ec2:*",
+                                "autoscaling:*",
+                                "logs:*",
+                                "lambda:*",
+                                "cloudformation:*",
+                                "apigateway:*",
+                                "dynamodb:*",
+                                "states:*",
+                                "iam:*"
+                            ],
+                            "Resource": "*",
+                            "Effect": "Allow"
+                        }
+                    ],
+                    "Version": "2012-10-17"
+                }
+            }
+        },
+        "PipelineRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "codepipeline.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    {
+                        "Ref": "PipelinePolicy"
+                    }
+                ],
+                "Path": "/"
+            }
+        },
+        "BuildProject": {
+            "Type": "AWS::CodeBuild::Project",
+            "Properties": {
+                "Artifacts": {
+                    "Location": {
+                        "Ref": "CodeBuildArtifactBucket"
+                    },
+                    "Name": "build.tgz",
+                    "NamespaceType": "BUILD_ID",
+                    "Packaging": "NONE",
+                    "Path": {
+                        "Fn::Sub": "${PackageName}-${PackageBranch}"
+                    },
+                    "Type": "S3"
+                },
+                "Environment": {
+                    "ComputeType": "BUILD_GENERAL1_SMALL",
+                    "Image": "aws/codebuild/ubuntu-base:14.04",
+                    "PrivilegedMode": false,
+                    "Type": "LINUX_CONTAINER",
+                    "EnvironmentVariables": [
+                        {
+                            "Name": "ECR_REPO",
+                            "Value": {"Fn::If":[
+                                "RepoNotProvided",
+                                {"Ref":"ECRRepo"},
+                                {"Ref":"ExistingECRRepo"}
+                            ]},
+                            "Type": "PLAINTEXT"
+                        },
+                        {
+                            "Name": "AWS_ACCOUNT_ID",
+                            "Value": {"Ref":"AWS::AccountId"},
+                            "Type": "PLAINTEXT"
+                        },
+                        {
+                            "Name": "GIT_PACKAGE",
+                            "Value": {"Ref":"PackageName"},
+                            "Type": "PLAINTEXT"
+                        },
+                        {
+                            "Name": "GIT_BRANCH",
+                            "Value": {"Ref":"PackageBranch"},
+                            "Type": "PLAINTEXT"
+                        },
+                        {
+                            "Name": "GIT_USER",
+                            "Value": {"Ref":"UserName"},
+                            "Type": "PLAINTEXT"
+                        }
+                    ]
+                },
+                "BadgeEnabled": false,
+                "Description": {
+                    "Fn::Sub": "CodeBuild project for branch ${PackageBranch} of package ${PackageName}"
+                },
+                "Name": {
+                    "Fn::Sub": "${PackageName}-${PackageBranch}"
+                },
+                "ServiceRole": {
+                    "Fn::GetAtt": [
+                        "BuildRole",
+                        "Arn"
+                    ]
+                },
+                "Source": {
+                    "Type": "GITHUB",
+                    "Location": {
+                        "Fn::Sub": "https://github.com/${UserName}/${PackageName}.git"
+                    },
+                    "Auth": {
+                        "Type": "OAUTH",
+                        "Resource": {
+                            "Ref": "OAuthToken"
+                        }
+                    }
+                },
+                "TimeoutInMinutes": {
+                    "Ref": "BuildTimeout"
+                }
+            }
+        },
+        "Pipeline": {
+            "Type": "AWS::CodePipeline::Pipeline",
+            "Properties": {
+                "ArtifactStore": {
+                    "Location": {
+                        "Ref": "CodeBuildArtifactBucket"
+                    },
+                    "Type": "S3"
+                },
+                "Name": {
+                    "Fn::Sub": "${PackageName}-${PackageBranch}"
+                },
+                "RestartExecutionOnUpdate": true,
+                "RoleArn": {
+                    "Fn::GetAtt": [
+                        "PipelineRole",
+                        "Arn"
+                    ]
+                },
+                "Stages": [
+                    {
+                        "Actions": [
+                            {
+                                "ActionTypeId": {
+                                    "Category": "Source",
+                                    "Owner": "ThirdParty",
+                                    "Provider": "GitHub",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "Repo": {
+                                        "Ref": "PackageName"
+                                    },
+                                    "Branch": {
+                                        "Ref": "PackageBranch"
+                                    },
+                                    "Owner": {
+                                        "Ref": "UserName"
+                                    },
+                                    "OAuthToken": {
+                                        "Ref": "OAuthToken"
+                                    },
+                                    "PollForSourceChanges": true
+                                },
+                                "InputArtifacts": [
+
+                                ],
+                                "Name": "Source",
+                                "OutputArtifacts": [
+                                    {
+                                        "Name": "PackageSourceCode"
+                                    }
+                                ],
+                                "RunOrder": 1
+                            }
+                        ],
+                        "Name": "Pull_Source"
+                    },
+                    {
+                        "Actions": [
+                            {
+                                "ActionTypeId": {
+                                    "Category": "Build",
+                                    "Owner": "AWS",
+                                    "Provider": "CodeBuild",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "ProjectName": {
+                                        "Ref": "BuildProject"
+                                    }
+                                },
+                                "InputArtifacts": [
+                                    {
+                                        "Name": "PackageSourceCode"
+                                    }
+                                ],
+                                "Name": "CodeBuild",
+                                "OutputArtifacts": [
+                                    {
+                                        "Name": "BuildArtifacts"
+                                    }
+                                ],
+                                "RunOrder": 1
+                            }
+                        ],
+                        "Name": "Create_Docker_Image"
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {}
+}
