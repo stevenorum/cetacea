@@ -23,32 +23,33 @@
             "Type": "Number",
             "Description": "Max time for the build to take, in minutes.",
             "Default": 15
-        },
-        "ExistingECRRepo": {
-            "Type":"String",
-            "Description":"Name of an existing ECR repository.  If none is provided, a new one will be created.",
-            "Default":""
-        },
-        "NewECRRepoName": {
-            "Type":"String",
-            "Description":"Name to use for a new ECR repository.  Ignored if ECRRepo is provided.",
-            "Default":""
-        }
-    },
-    "Conditions":{
-        "RepoNotProvided":{
-            "Fn::Equals":["",{"Ref":"ExistingECRRepo"}]
-        },
-        "RepoNameProvided":{
-            "Fn::Not":[{"Fn::Equals":["",{"Ref":"NewECRRepoName"}]}]
         }
     },
     "Resources": {
         "ECRRepo": {
             "Type" : "AWS::ECR::Repository",
-            "Condition" : "RepoNotProvided",
             "Properties" : {
-                "RepositoryName" : {"Fn::If":["RepoNameProvided",{"Ref":"NewECRRepoName"},{"Ref":"AWS::NoValue"}]}
+                "RepositoryName" : "cetacea",
+                "RepositoryPolicyText" : {
+                    "Version": "2008-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowCodeBuildUsage",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "codebuild.amazonaws.com"
+                            },
+                            "Action": [
+                                "ecr:Get*",
+                                "ecr:Describe*",
+                                "ecr:List*",
+                                "ecr:GetDownloadUrlForLayer",
+                                "ecr:BatchGetImage",
+                                "ecr:BatchCheckLayerAvailability"
+                            ]
+                        }
+                    ]
+                }
             }
         },
         "CodeBuildArtifactBucket": {
@@ -224,11 +225,7 @@
                     "EnvironmentVariables": [
                         {
                             "Name": "IMAGE_REPO_NAME",
-                            "Value": {"Fn::If":[
-                                "RepoNotProvided",
-                                {"Ref":"ECRRepo"},
-                                {"Ref":"ExistingECRRepo"}
-                            ]},
+                            "Value": {"Ref":"ECRRepo"},
                             "Type": "PLAINTEXT"
                         },
                         {
@@ -375,5 +372,14 @@
             }
         }
     },
-    "Outputs": {}
+    "Outputs": {
+        "ImageName": {
+            "Value":{"Fn::Sub":"${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepo}:${PackageName}"},
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "amazonlinux-codebuild-image-${AWS::StackName}"
+                }
+            }
+        }
+    }
 }
