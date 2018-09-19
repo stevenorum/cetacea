@@ -12,3 +12,6 @@ For general info on how to set up the CF stack, see the "codepipeline-github.cf.
 Assuming you used the template without any changes, you can now refer to this image in other CloudFormation templates with ```{"Fn::ImportValue":"amazonlinux-codebuild-image-$STACK_NAME"}```, where ```$STACK_NAME``` is, fairly obviously, the name of the stack you created to generate the image.  I generally just name the stack "cetacea" and most of my example templates will assume that import is available.
 ### Use the image elsewhere
 There are instructions on pulling images for use outside of AWS services [in the AWS ECR docs](https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-pull-ecr-image.html).  The image name will be ```$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/cetacea:$STACK_NAME```, where ```$ACCOUNT_ID``` is your 12-digit AWS account ID and ```$REGION``` is the AWS region name (for example, "us-east-1").
+
+## Why the name "cetacea"?
+Docker's logo is a whale and cetacea is [the taxonomic category containing whales](https://en.wikipedia.org/wiki/Cetacea).
