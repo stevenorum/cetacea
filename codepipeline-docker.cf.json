@@ -23,13 +23,28 @@
             "Type": "Number",
             "Description": "Max time for the build to take, in minutes.",
             "Default": 15
+        },
+        "ExistingECRRepo": {
+            "Type": "String",
+            "Description": "Name of an existing ECR Repo to use instead of creating a new one.  If not provided, a new one will br created as part of the stack.",
+            "Default": ""
+        },
+        "ImageName": {
+            "Type": "String",
+            "Description": "Name to use for the image created."
+        }
+    },
+    "Conditions":{
+        "CreateECRRepo":{
+            "Fn::Equals":["",{"Ref":"ExistingECRRepo"}]
         }
     },
     "Resources": {
         "ECRRepo": {
             "Type" : "AWS::ECR::Repository",
+            "Condition" : "CreateECRRepo",
             "Properties" : {
-                "RepositoryName" : "cetacea",
+                "RepositoryName" : {"Ref" : "AWS::StackName"},
                 "RepositoryPolicyText" : {
                     "Version": "2008-10-17",
                     "Statement": [
@@ -225,7 +240,12 @@
                     "EnvironmentVariables": [
                         {
                             "Name": "IMAGE_REPO_NAME",
-                            "Value": {"Ref":"ECRRepo"},
+                            "Value": {"Fn::If":["CreateECRRepo",{"Ref":"ECRRepo"},{"Ref":"ExistingECRRepo"}]},
+                            "Type": "PLAINTEXT"
+                        },
+                        {
+                            "Name": "IMAGE_NAME",
+                            "Value": {"Ref":"ImageName"},
                             "Type": "PLAINTEXT"
                         },
                         {
@@ -374,7 +394,10 @@
     },
     "Outputs": {
         "ImageName": {
-            "Value":{"Fn::Sub":"${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepo}:${PackageName}"},
+            "Value": {"Fn::If":["CreateECRRepo",
+                                {"Fn::Sub":"${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepo}:${ImageName}"},
+                                {"Fn::Sub":"${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ExistingECRRepo}:${ImageName}"}
+                               ]},
             "Export": {
                 "Name": {
                     "Fn::Sub": "amazonlinux-codebuild-image-${AWS::StackName}"

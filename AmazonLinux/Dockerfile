@@ -4,3 +4,4 @@ RUN yum update -y && yum install -y aws-cli python36 python36-devel python3-pip 
 
 RUN pip3 install --upgrade pip
 RUN pip3 install --upgrade awscli
+COPY codebuild_resources/scripts /root/scripts
