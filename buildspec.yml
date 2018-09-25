@@ -7,7 +7,7 @@ phases:
     commands:
       - env
       - pwd
-      - ./build.sh
+      - bash build.sh
 artifacts:
   type: zip
   files:
